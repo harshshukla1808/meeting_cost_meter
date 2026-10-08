@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Meeting Cost Meter</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;800&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f2f8fe; --panel:#ffffff; --ink:#12304d; --muted:#6482a0; --line:#d9e8f6;
+  --lcd-bg:#e8f3fd; --lcd:#0c5aa6; --lcd-dim:#9cc0e3; --go:#1d7fe0; --stop:#e5604a; --accent:#1d7fe0;
+  color-scheme:light;
+  box-sizing:border-box; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+*,*::before,*::after{box-sizing:border-box}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:linear-gradient(180deg,#ffffff 0%,var(--bg) 320px);color:var(--ink);font-family:"Bricolage Grotesque",system-ui,-apple-system,"Segoe UI",sans-serif;line-height:1.5}
+main{max-width:720px;margin:0 auto;padding:20px 16px 48px}
+h1{font-size:1.5rem;font-weight:800;margin:0 0 2px;letter-spacing:-.01em}
+.sub{margin:0 0 18px;color:var(--muted);font-size:.95rem}
+
+/* meter */
+.meter{background:var(--panel);border:1px solid var(--line);border-radius:22px;padding:16px;box-shadow:0 18px 40px -18px rgba(29,127,224,.35)}
+.lcd{background:var(--lcd-bg);border:1px solid var(--line);border-radius:14px;padding:14px 16px 12px;text-align:right;position:relative;overflow:hidden}
+.lcd .tag{position:absolute;left:14px;top:12px;color:var(--lcd-dim);font-family:"Share Tech Mono",ui-monospace,monospace;font-size:.8rem}
+.cost{font-family:"Share Tech Mono",ui-monospace,Consolas,monospace;color:var(--lcd);font-size:clamp(2.4rem,12vw,4.6rem);line-height:1.1;word-break:break-all}
+.row3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}
+.stat{background:var(--bg);border-radius:12px;padding:8px 10px}
+.stat span{display:block;color:var(--muted);font-size:.78rem}
+.stat strong{font-family:"Share Tech Mono",ui-monospace,monospace;font-size:1.1rem;font-weight:400}
+.btns{display:flex;gap:8px;margin-top:12px}
+button{font:inherit;font-weight:600;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:12px;padding:10px 14px;cursor:pointer;min-height:44px}
+button:hover{background:var(--bg)}
+button:focus-visible,input:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+#toggle{flex:2;background:var(--go);color:#fff;border-color:var(--go);box-shadow:0 8px 18px -8px rgba(29,127,224,.7)}
+#toggle.running{background:var(--stop);border-color:var(--stop)}
+#reset{flex:1}
+
+/* sections */
+section{margin-top:22px}
+h2{font-size:1.1rem;margin:0 0 8px}
+.hint{color:var(--muted);font-size:.9rem;margin:0 0 10px}
+.roles{display:grid;gap:8px}
+.role{box-shadow:0 1px 2px rgba(18,48,77,.04);display:grid;grid-template-columns:1.6fr 1fr 1.2fr auto;gap:8px;align-items:end;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px}
+label{display:block;font-size:.78rem;color:var(--muted);margin-bottom:2px}
+input{width:100%;font:inherit;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);min-height:40px}
+.del{padding:8px 10px;min-height:40px;color:var(--stop)}
+.add{margin-top:8px;width:100%;border-style:dashed;border-color:#b5d3ee;color:var(--accent)}
+.err{color:var(--stop);font-size:.9rem;min-height:1.2em;margin-top:6px}
+
+/* history */
+ul{list-style:none;margin:0;padding:0}
+.hist li{display:flex;justify-content:space-between;gap:10px;padding:10px 12px;background:var(--panel);border:1px solid var(--line);border-radius:10px;margin-bottom:6px;font-size:.92rem}
+.hist .when{color:var(--muted)}
+.empty{color:var(--muted);font-size:.92rem}
+.linkbtn{border:0;background:none;color:var(--accent);padding:0;min-height:0;text-decoration:underline;font-weight:400}
+
+@media (max-width:520px){
+  .role{grid-template-columns:1fr 1fr;}
+  .role .name{grid-column:1/-1}
+  .del{grid-column:2;justify-self:end}
+}
+@media (prefers-reduced-motion:no-preference){ button{transition:background .15s} }
+</style>
+</head>
+<body>
+<main>
+  <h1>Meeting Cost Meter</h1>
+  <p class="sub">Meeting shuru karo, aur dekho paisa kitni tezi se jal raha hai.</p>
+
+  <div class="meter" role="group" aria-label="Meeting cost meter">
+    <div class="lcd">
+      <span class="tag">TOTAL COST</span>
+      <div class="cost" id="cost" aria-live="off">₹0.00</div>
+    </div>
+    <div class="row3">
+      <div class="stat"><span>Time</span><strong id="elapsed">00:00:00</strong></div>
+      <div class="stat"><span>Per minute</span><strong id="perMin">₹0</strong></div>
+      <div class="stat"><span>People</span><strong id="people">0</strong></div>
+    </div>
+    <div class="btns">
+      <button id="toggle" type="button">Start meeting</button>
+      <button id="reset" type="button">Reset</button>
+    </div>
+    <div class="err" id="err" role="alert"></div>
+  </div>
+
+  <section>
+    <h2>Who is in the meeting?</h2>
+    <p class="hint">Har role ke liye headcount aur hourly rate (₹) daalo.</p>
+    <div class="roles" id="roles"></div>
+    <button class="add" id="addRole" type="button">Add role</button>
+  </section>
+
+  <section>
+    <h2>Past meetings</h2>
+    <ul class="hist" id="hist"></ul>
+    <p class="empty" id="histEmpty">Abhi koi meeting save nahi hui. Reset dabane par meeting yahan save hogi.</p>
+    <button class="linkbtn" id="clearHist" type="button" hidden>Clear history</button>
+  </section>
+</main>
+
+<script>
+(function(){
+  var KEY_ROLES='mcm_roles_v1', KEY_HIST='mcm_hist_v1';
+  var defaultRoles=[{name:'Developer',count:3,rate:600},{name:'Manager',count:1,rate:1200}];
+  var roles=load(KEY_ROLES,defaultRoles), hist=load(KEY_HIST,[]);
+  var running=false, elapsedMs=0, startedAt=0, timer=null;
+
+  var $=function(id){return document.getElementById(id)};
+  var costEl=$('cost'), elapsedEl=$('elapsed'), perMinEl=$('perMin'), peopleEl=$('people');
+  var toggleBtn=$('toggle'), resetBtn=$('reset'), errEl=$('err');
+
+  function load(k,fb){try{var v=JSON.parse(localStorage.getItem(k));return Array.isArray(v)&&v.length>=0&&v!==null?v:fb}catch(e){return fb}}
+  function save(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
+  var inr=new Intl.NumberFormat('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});
+  var inr0=new Intl.NumberFormat('en-IN',{maximumFractionDigits:0});
+  function pad(n){return String(n).padStart(2,'0')}
+  function fmtTime(ms){var s=Math.floor(ms/1000);return pad(Math.floor(s/3600))+':'+pad(Math.floor(s%3600/60))+':'+pad(s%60)}
+  function esc(s){return String(s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
+
+  function perHour(){return roles.reduce(function(t,r){return t+(Number(r.count)||0)*(Number(r.rate)||0)},0)}
+  function headcount(){return roles.reduce(function(t,r){return t+(Number(r.count)||0)},0)}
+  function currentMs(){return elapsedMs+(running?Date.now()-startedAt:0)}
+  function currentCost(){return perHour()*currentMs()/3600000}
+
+  function render(){
+    var ms=currentMs();
+    costEl.textContent='₹'+inr.format(currentCost());
+    elapsedEl.textContent=fmtTime(ms);
+    perMinEl.textContent='₹'+inr0.format(perHour()/60);
+    peopleEl.textContent=headcount();
+  }
+
+  function renderRoles(){
+    var box=$('roles'); box.innerHTML='';
+    roles.forEach(function(r,i){
+      var d=document.createElement('div'); d.className='role';
+      d.innerHTML=
+        '<div class="name"><label for="n'+i+'">Role</label><input id="n'+i+'" data-i="'+i+'" data-f="name" value="'+esc(r.name)+'" placeholder="e.g. Designer"></div>'+
+        '<div><label for="c'+i+'">People</label><input id="c'+i+'" data-i="'+i+'" data-f="count" type="number" min="0" inputmode="numeric" value="'+esc(r.count)+'"></div>'+
+        '<div><label for="r'+i+'">₹ per hour</label><input id="r'+i+'" data-i="'+i+'" data-f="rate" type="number" min="0" inputmode="numeric" value="'+esc(r.rate)+'"></div>'+
+        '<button class="del" type="button" data-del="'+i+'" aria-label="Remove role">Remove</button>';
+      box.appendChild(d);
+    });
+  }
+
+  function renderHist(){
+    var ul=$('hist'); ul.innerHTML='';
+    hist.forEach(function(h){
+      var li=document.createElement('li');
+      li.innerHTML='<span><strong>₹'+inr.format(h.cost)+'</strong> <span class="when">· '+fmtTime(h.ms)+' · '+h.people+' people</span></span><span class="when">'+esc(h.date)+'</span>';
+      ul.appendChild(li);
+    });
+    $('histEmpty').hidden=hist.length>0;
+    $('clearHist').hidden=hist.length===0;
+  }
+
+  function tick(){render()}
+  function start(){
+    if(headcount()<=0||perHour()<=0){errEl.textContent='Kam se kam ek role me people aur rate daalo, tab meter chalega.';return}
+    errEl.textContent='';
+    running=true; startedAt=Date.now();
+    timer=setInterval(tick,100);
+    toggleBtn.textContent='Pause'; toggleBtn.classList.add('running');
+  }
+  function pause(){
+    elapsedMs+=Date.now()-startedAt; running=false; clearInterval(timer);
+    toggleBtn.textContent='Resume meeting'; toggleBtn.classList.remove('running'); render();
+  }
+  function reset(){
+    var ms=currentMs(), cost=currentCost();
+    if(running){clearInterval(timer);running=false}
+    if(ms>=1000){
+      hist.unshift({cost:cost,ms:ms,people:headcount(),date:new Date().toLocaleString('en-IN',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})});
+      hist=hist.slice(0,5); save(KEY_HIST,hist); renderHist();
+    }
+    elapsedMs=0; errEl.textContent='';
+    toggleBtn.textContent='Start meeting'; toggleBtn.classList.remove('running'); render();
+  }
+
+  toggleBtn.addEventListener('click',function(){running?pause():start()});
+  resetBtn.addEventListener('click',reset);
+  $('addRole').addEventListener('click',function(){roles.push({name:'',count:1,rate:500});save(KEY_ROLES,roles);renderRoles();render()});
+  $('clearHist').addEventListener('click',function(){hist=[];save(KEY_HIST,hist);renderHist()});
+  $('roles').addEventListener('input',function(e){
+    var t=e.target, i=t.getAttribute('data-i'), f=t.getAttribute('data-f');
+    if(i===null)return;
+    roles[i][f]=(f==='name')?t.value:Math.max(0,Number(t.value)||0);
+    save(KEY_ROLES,roles); render();
+  });
+  $('roles').addEventListener('click',function(e){
+    var i=e.target.getAttribute('data-del'); if(i===null)return;
+    roles.splice(Number(i),1); save(KEY_ROLES,roles); renderRoles(); render();
+  });
+  document.addEventListener('visibilitychange',function(){if(!document.hidden)render()});
+
+  renderRoles(); renderHist(); render();
+})();
+</script>
+</body>
+</html>
